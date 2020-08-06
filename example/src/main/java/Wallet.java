@@ -10,6 +10,7 @@ public class Wallet {
     private static final String BITCOIN_TEST_URL = "https://api.bitcore.io/api/BTC/testnet";
 
     public static void main(String[] args) throws IOException {
+        // Building...(offline)
         Transaction transaction = new Transaction.Builder()
                 .from("mjhAYkzNQbvdWAR2CTtP5HRqdr7RhaWE29")
                 .to("mg6QezKh6pidbDEXYFpdP7CLiGZ94k3NAz", BigDecimal.valueOf(0.00001))
@@ -22,8 +23,8 @@ public class Wallet {
         PackedTransaction packedTx = bitcoin.packTransaction(transaction);
         // Signing...(offline)
         List<String> keys = Collections.singletonList("7783f51f3cab49b1cab5952de8c13472ae196581fba89addf145f1b71c42f4a4");
-        // Sending...(online)
         SignedTransaction signedTx = bitcoin.signTransaction(packedTx, keys);
+        // Sending...(online)
         String hash = bitcoin.sendTransaction(signedTx);
         System.out.println("Hash: \t" + hash);
     }
