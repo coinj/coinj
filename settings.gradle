@@ -1,0 +1,4 @@
+rootProject.name = 'coinj'
+include 'core'
+include 'example'
+
