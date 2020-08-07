@@ -5,11 +5,12 @@ import java.io.IOException;
 import java.math.BigDecimal;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.ExecutionException;
 
 public class Wallet {
     private static final String BITCOIN_TEST_URL = "https://api.bitcore.io/api/BTC/testnet";
 
-    public static void main(String[] args) throws IOException {
+    public static void main(String[] args) throws IOException, ExecutionException, InterruptedException {
         // Building...(offline)
         Transaction transaction = new Transaction.Builder()
                 .from("mjhAYkzNQbvdWAR2CTtP5HRqdr7RhaWE29")

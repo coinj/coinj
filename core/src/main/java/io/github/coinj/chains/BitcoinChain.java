@@ -3,9 +3,7 @@ package io.github.coinj.chains;
 import com.google.common.base.Preconditions;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
-import io.github.coinj.Network;
-import io.github.coinj.PackedTransaction;
-import io.github.coinj.SignedTransaction;
+import io.github.coinj.*;
 import io.github.coinj.Transaction;
 import okhttp3.Request;
 import okhttp3.RequestBody;
@@ -51,6 +49,17 @@ public class BitcoinChain extends AbstractChain {
         }
         this.url = url;
         this.coin = coin;
+    }
+
+    @Override
+    public KeyPair generateKeyPair(String secret) {
+        ECKey ecKey = ECKey.fromPrivate(ByteUtils.fromHexString(secret));
+        return new KeyPair(secret, Address.fromKey(netParams, ecKey, Script.ScriptType.P2PKH).toString());
+    }
+
+    @Override
+    public KeyPair generateKeyPair() {
+        return generateKeyPair(new ECKey().getPrivateKeyAsHex());
     }
 
     private BitcoinTransaction toBitcoinTx(Transaction transaction, List<UnspentOutput> unspentOutputs) {

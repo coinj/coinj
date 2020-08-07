@@ -2,9 +2,13 @@ package io.github.coinj;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.concurrent.ExecutionException;
 
 public interface Chain {
-    PackedTransaction packTransaction(Transaction transaction) throws IOException;
+    KeyPair generateKeyPair();
+    KeyPair generateKeyPair(String secret);
+
+    PackedTransaction packTransaction(Transaction transaction) throws IOException, ExecutionException, InterruptedException;
     SignedTransaction signTransaction(PackedTransaction transaction, List<String> keys);
     String sendTransaction(SignedTransaction transaction) throws IOException;
 }
