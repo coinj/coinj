@@ -1,10 +1,12 @@
 package io.github.coinj.chains;
 
 import com.google.common.base.Preconditions;
+import com.google.common.collect.ImmutableList;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 import io.github.coinj.*;
-import io.github.coinj.Transaction;
+import io.github.coinj.Coin;
+import io.github.coinj.RawTransaction;
 import okhttp3.Request;
 import okhttp3.RequestBody;
 import okhttp3.Response;
@@ -24,31 +26,29 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
-public class BitcoinChain extends AbstractChain {
+import static org.bitcoinj.script.ScriptOpCodes.OP_CHECKMULTISIG;
+
+public class BitcoinChain extends AbstractChain implements MultiSig {
+    public final static String MAINNET_URL = "https://api.bitcore.io/api/BTC/mainnet";
+    public final static String TESTNET_URL = "https://api.bitcore.io/api/BTC/testnet";
+
     private final static BigDecimal DUST_THRESHOLD = new BigDecimal(2730).movePointLeft(8);
-    private final static String DEFAULT_URL = "https://api.bitcore.io/api/BTC/mainnet";
 
     private NetworkParameters netParams = MainNetParams.get();
-    private final Coin coin;
-    private String url = DEFAULT_URL;
+    private String url;
 
-    public enum Coin {
-        BTC, USDT
-    }
+    public static final List<Coin> COINS = ImmutableList.of(Coin.BTC, Coin.ETH);
 
-    public BitcoinChain(Coin coin) {
-        this.coin = coin;
-    }
-
-    public BitcoinChain(Network network, String url, Coin coin) {
+    public BitcoinChain(Network network, String url) {
         switch (network) {
             case MAIN:
                 netParams = MainNetParams.get();
+                break;
             case TEST:
                 netParams = TestNet3Params.get();
+                break;
         }
         this.url = url;
-        this.coin = coin;
     }
 
     @Override
@@ -62,7 +62,7 @@ public class BitcoinChain extends AbstractChain {
         return generateKeyPair(new ECKey().getPrivateKeyAsHex());
     }
 
-    private BitcoinTransaction toBitcoinTx(Transaction transaction, List<UnspentOutput> unspentOutputs) {
+    private BitcoinTransaction toBitcoinTx(RawTransaction rawTransaction, List<UnspentOutput> unspentOutputs) {
         BigDecimal totalInputAmount = new BigDecimal(0);
         for (UnspentOutput output : unspentOutputs) {
             BigDecimal amount = BigDecimal.valueOf(output.getValue()).movePointLeft(8);
@@ -70,7 +70,7 @@ public class BitcoinChain extends AbstractChain {
         }
 
         BigDecimal totalOutputAmount = new BigDecimal(0);
-        for (Transaction.Output output : transaction.getOutputs()) {
+        for (RawTransaction.Output output : rawTransaction.getOutputs()) {
             totalOutputAmount = totalOutputAmount.add(output.getAmount());
         }
 
@@ -79,8 +79,8 @@ public class BitcoinChain extends AbstractChain {
         }
 
         BigDecimal fee = BigDecimal.ZERO;
-        if (transaction.getFee() != null) {
-            fee = transaction.getFee();
+        if (rawTransaction.getFee() != null) {
+            fee = rawTransaction.getFee();
         }
 
         BitcoinTransaction bitcoinTx = new BitcoinTransaction(netParams);
@@ -88,20 +88,20 @@ public class BitcoinChain extends AbstractChain {
             TransactionOutPoint outPoint = new TransactionOutPoint(netParams, output.getIndex(), Sha256Hash.wrap(output.getTxId()));
             bitcoinTx.addInput(new TransactionInput(netParams, bitcoinTx, ByteUtils.fromHexString(output.getScript()), outPoint, org.bitcoinj.core.Coin.valueOf(output.getValue())));
         }
-        for (Transaction.Output output : transaction.getOutputs()) {
+        for (RawTransaction.Output output : rawTransaction.getOutputs()) {
             Long satoshi = output.getAmount().movePointRight(8).longValue();
             bitcoinTx.addOutput(org.bitcoinj.core.Coin.valueOf(satoshi), Address.fromString(netParams, output.getAddress()));
         }
 
         BigDecimal changeAmount = totalInputAmount.subtract(totalOutputAmount.add(fee));
         if (changeAmount.compareTo(DUST_THRESHOLD) > -1) {
-            Preconditions.checkNotNull(transaction.getChange(), "Not found change address");
-            bitcoinTx.addOutput(org.bitcoinj.core.Coin.valueOf(changeAmount.movePointRight(8).longValue()), Address.fromString(netParams, transaction.getChange()));
+            Preconditions.checkNotNull(rawTransaction.getChange(), "Not found change address");
+            bitcoinTx.addOutput(org.bitcoinj.core.Coin.valueOf(changeAmount.movePointRight(8).longValue()), Address.fromString(netParams, rawTransaction.getChange()));
         }
         return bitcoinTx;
     }
 
-    private BigDecimal calcFee(Transaction transaction, List<UnspentOutput> unspentOutputs) throws IOException {
+    private BigDecimal calcFee(RawTransaction rawTransaction, List<UnspentOutput> unspentOutputs) throws IOException {
         Request request = new Request.Builder()
                 .url(this.url + "/fee/1")
                 .build();
@@ -114,15 +114,17 @@ public class BitcoinChain extends AbstractChain {
             BigDecimal amount = BigDecimal.valueOf(output.getValue()).movePointLeft(8);
             total = total.add(amount);
         }
-        BitcoinTransaction bitcoinTx = toBitcoinTx(transaction, unspentOutputs);
+        BitcoinTransaction bitcoinTx = toBitcoinTx(rawTransaction, unspentOutputs);
         return feeRate.multiply(BigDecimal.valueOf(bitcoinTx.getMessageSizeForPriorityCalc()));
     }
 
     @Override
-    public PackedTransaction packTransaction(Transaction transaction) throws IOException {
+    public PackedRawTransaction packTransaction(RawTransaction rawTransaction) throws IOException {
+        Preconditions.checkArgument(BitcoinChain.COINS.contains(rawTransaction.getCoin()), "Unsupported " + rawTransaction.getCoin().toString() + "for Bitcoin Chain");
+
         List<UnspentOutput> unspentOutputs = new ArrayList<>();
-        PackedTransaction packedTx = new PackedTransaction(transaction);
-        for (Transaction.Input input : transaction.getInputs()) {
+        PackedRawTransaction packedTx = new PackedRawTransaction(rawTransaction);
+        for (RawTransaction.Input input : rawTransaction.getInputs()) {
             Request request = new Request.Builder()
                     .url(this.url + "/address/" + input.getAddress() + "?unspent=true")
                     .build();
@@ -132,8 +134,8 @@ public class BitcoinChain extends AbstractChain {
         }
         packedTx.setExtra("utxo", unspentOutputs);
 
-        if (transaction.getFee() == null) {
-            BigDecimal fee = calcFee(transaction, unspentOutputs);
+        if (rawTransaction.getFee() == null) {
+            BigDecimal fee = calcFee(rawTransaction, unspentOutputs);
             packedTx.setFee(fee);
         }
         return packedTx;
@@ -155,7 +157,7 @@ public class BitcoinChain extends AbstractChain {
     }
 
     @Override
-    public SignedTransaction signTransaction(PackedTransaction transaction, List<String> keys) {
+    public SignedRawTransaction signTransaction(PackedRawTransaction transaction, List<String> keys) {
         List<UnspentOutput> unspentOutputs = (List<UnspentOutput>) transaction.getExtra("utxo");
         BitcoinTransaction bitcoinTx = toBitcoinTx(transaction, unspentOutputs);
         for (int i = 0; i < bitcoinTx.getInputs().size(); i++) {
@@ -179,11 +181,11 @@ public class BitcoinChain extends AbstractChain {
         // {"rawTx":"02....00"}
         JSONObject rawTx = new JSONObject();
         rawTx.put("rawTx", ByteUtils.toHexString(bitcoinTx.bitcoinSerialize()));
-        return new SignedTransaction(transaction, rawTx);
+        return new SignedRawTransaction(transaction, rawTx);
     }
 
     @Override
-    public String sendTransaction(SignedTransaction transaction) throws IOException {
+    public String sendTransaction(SignedRawTransaction transaction) throws IOException {
         RequestBody body = RequestBody.create(transaction.getRawTx().toString(), JSON);
         Request request = new Request.Builder()
                 .url(this.url + "/tx/send")
@@ -192,5 +194,32 @@ public class BitcoinChain extends AbstractChain {
         Response response = client.newCall(request).execute();
         JSONObject data = new JSONObject(Objects.requireNonNull(response.body()).string());
         return data.getString("txid");
+    }
+
+    @Override
+    public String deployMultiSigContract(List<String> keys, int requiredConfirmations) {
+        ScriptBuilder builder = new ScriptBuilder();
+        builder.smallNum(requiredConfirmations);
+        for (String key : keys) {
+            ECKey ecKey = ECKey.fromPrivate(ByteUtils.fromHexString(key));
+            builder.data(ecKey.getPubKey());
+        }
+        builder.smallNum(keys.size());
+        builder.op(OP_CHECKMULTISIG);
+        Script script = builder.build();
+
+        byte[] bytes = Utils.sha256hash160(script.getProgram());
+        byte[] addressBytes = new byte[1 + bytes.length + 4];
+        addressBytes[0] = (byte) netParams.getP2SHHeader();
+        System.arraycopy(bytes, 0, addressBytes, 1, bytes.length);
+        byte[] checksum = Sha256Hash.hashTwice(addressBytes, 0, bytes.length + 1);
+        System.arraycopy(checksum, 0, addressBytes, bytes.length + 1, 4);
+        return Base58.encode(addressBytes);
+    }
+
+    static class BitcoinTransaction extends Transaction {
+        public BitcoinTransaction(NetworkParameters params) {
+            super(params);
+        }
     }
 }

@@ -2,11 +2,11 @@ package io.github.coinj;
 
 import org.json.JSONObject;
 
-public class SignedTransaction extends PackedTransaction {
+public class SignedRawTransaction extends PackedRawTransaction {
     private JSONObject rawTx;
 
-    public SignedTransaction(Transaction transaction, JSONObject rawTx) {
-        super(transaction);
+    public SignedRawTransaction(RawTransaction rawTransaction, JSONObject rawTx) {
+        super(rawTransaction);
         this.rawTx = rawTx;
     }
 

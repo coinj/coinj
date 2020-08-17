@@ -8,7 +8,8 @@ public interface Chain {
     KeyPair generateKeyPair();
     KeyPair generateKeyPair(String secret);
 
-    PackedTransaction packTransaction(Transaction transaction) throws IOException, ExecutionException, InterruptedException;
-    SignedTransaction signTransaction(PackedTransaction transaction, List<String> keys);
-    String sendTransaction(SignedTransaction transaction) throws IOException;
+    PackedRawTransaction packTransaction(RawTransaction rawTransaction) throws IOException, ExecutionException, InterruptedException;
+    SignedRawTransaction signTransaction(PackedRawTransaction transaction, List<String> keys);
+
+    String sendTransaction(SignedRawTransaction transaction) throws IOException;
 }

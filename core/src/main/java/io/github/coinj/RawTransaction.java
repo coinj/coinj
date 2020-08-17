@@ -4,20 +4,22 @@ import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 
-public class Transaction {
+public class RawTransaction {
     private List<Input> inputs;
     private List<Output> outputs;
 
     private BigDecimal fee;
     private String change;
 
-    public Transaction(List<Input> inputs, List<Output> outputs, BigDecimal fee) {
+    private Coin coin;
+
+    public RawTransaction(List<Input> inputs, List<Output> outputs, BigDecimal fee) {
         this.inputs = inputs;
         this.outputs = outputs;
         this.fee = fee;
     }
 
-    public Transaction(List<Input> inputs, List<Output> outputs, BigDecimal fee, String change) {
+    public RawTransaction(List<Input> inputs, List<Output> outputs, BigDecimal fee, String change) {
         this.inputs = inputs;
         this.outputs = outputs;
         this.fee = fee;
@@ -54,6 +56,14 @@ public class Transaction {
 
     public void setFee(BigDecimal fee) {
         this.fee = fee;
+    }
+
+    public Coin getCoin() {
+        return coin;
+    }
+
+    public void setCoin(Coin coin) {
+        this.coin = coin;
     }
 
     public static class Input {
@@ -99,11 +109,12 @@ public class Transaction {
     }
 
     public static class Builder {
-        private List<Input> inputs = new ArrayList<>();
-        private List<Output> outputs = new ArrayList<>();
+        private final List<Input> inputs = new ArrayList<>();
+        private final List<Output> outputs = new ArrayList<>();
         private BigDecimal fee;
         private String change;
-        public Builder() {
+        private Coin coin;
+        public Builder(Coin coin) {
         }
 
         public Builder from(String address) {
@@ -135,8 +146,8 @@ public class Transaction {
             return this;
         }
 
-        public Transaction build() {
-            return new Transaction(inputs, outputs, fee, change);
+        public RawTransaction build() {
+            return new RawTransaction(inputs, outputs, fee, change);
         }
     }
 }

@@ -1,7 +1,10 @@
 package io.github.coinj.chains;
 
 import com.google.common.base.Preconditions;
+import com.google.common.collect.ImmutableList;
 import io.github.coinj.*;
+import io.github.coinj.RawTransaction;
+import io.github.coinj.SignedRawTransaction;
 import org.bitcoinj.core.ECKey;
 import org.bouncycastle.pqc.math.linearalgebra.ByteUtils;
 import org.json.JSONArray;
@@ -20,35 +23,15 @@ import java.util.List;
 import java.util.concurrent.ExecutionException;
 
 public class EthereumChain implements Chain {
+
+    public static final List<io.github.coinj.Coin> COINS = ImmutableList.of(Coin.ETH, Coin.USDT);
+
     private final static String DEFAULT_URL = "https://api.infura.io/v1/jsonrpc/mainnet";
 
     private long chainId;
-    private Coin coin;
-    private String url = DEFAULT_URL;
+    private final String url;
 
-    public enum Coin {
-        ETH, USDT;
-
-        String getAddress() {
-            switch (this) {
-                case USDT:
-                    return "0xdac17f958d2ee523a2206206994597c13d831ec7";
-                default:
-                    return null;
-            }
-        }
-
-        int getDecimals() {
-            switch (this) {
-                case USDT:
-                    return 6;
-                default:
-                    return 18;
-            }
-        }
-    }
-
-    public EthereumChain(Network network, String url, Coin coin) {
+    public EthereumChain(Network network, String url) {
         switch (network) {
             case MAIN:
                 chainId = ChainIdLong.MAINNET;
@@ -56,7 +39,16 @@ public class EthereumChain implements Chain {
                 chainId = ChainIdLong.KOVAN;
         }
         this.url = url;
-        this.coin = coin;
+    }
+
+    private int getDecimals(Coin coin) {
+        Preconditions.checkArgument(COINS.contains(coin));
+        switch (coin) {
+            case USDT:
+                return 6;
+            default:
+                return 18;
+        }
     }
 
     @Override
@@ -72,18 +64,18 @@ public class EthereumChain implements Chain {
     }
 
     @Override
-    public PackedTransaction packTransaction(Transaction transaction) throws ExecutionException, InterruptedException {
-        PackedTransaction packedTx = new PackedTransaction(transaction);
+    public PackedRawTransaction packTransaction(RawTransaction rawTransaction) throws ExecutionException, InterruptedException {
+        PackedRawTransaction packedTx = new PackedRawTransaction(rawTransaction);
         Web3j web3 = Web3j.build(new HttpService(url));
         BigInteger gasPrice = web3.ethGasPrice().sendAsync().get().getGasPrice();
-        Transaction.Input from = transaction.getInputs().get(0);
+        RawTransaction.Input from = rawTransaction.getInputs().get(0);
         BigInteger nonce = web3.ethGetTransactionCount(from.getAddress(), DefaultBlockParameterName.LATEST).sendAsync().get().getTransactionCount();
         BigInteger gasLimit = null;
-        Transaction.Output output = packedTx.getOutputs().get(0);
+        RawTransaction.Output output = packedTx.getOutputs().get(0);
         BigInteger value = null;
-        BigInteger transferValue = output.getAmount().movePointRight(this.coin.getDecimals()).toBigInteger();
+        BigInteger transferValue = output.getAmount().movePointRight(this.getDecimals(rawTransaction.getCoin())).toBigInteger();
         String data = "";
-        if (this.coin == Coin.ETH) {
+        if (rawTransaction.getCoin() == Coin.ETH) {
             value = transferValue;
             EthEstimateGas estimateGas = web3.ethEstimateGas(new org.web3j.protocol.core.methods.request.Transaction(from.getAddress(), nonce, null, null, output.getAddress(), value, null)).sendAsync().get();
             gasLimit = estimateGas.getAmountUsed();
@@ -110,15 +102,15 @@ public class EthereumChain implements Chain {
     }
 
     @Override
-    public SignedTransaction signTransaction(PackedTransaction transaction, List<String> keys) {
+    public SignedRawTransaction signTransaction(PackedRawTransaction transaction, List<String> keys) {
         BigInteger nonce = (BigInteger) transaction.getExtra("nonce");
         BigInteger gasPrice = (BigInteger) transaction.getExtra("gasPrice");
         BigInteger gasLimit = (BigInteger) transaction.getExtra("gasLimit");
         BigInteger value = (BigInteger) transaction.getExtra("value");
         String data = (String) transaction.getExtra("data");
 
-        Transaction.Output to = transaction.getOutputs().get(0);
-        RawTransaction rawTransaction = RawTransaction.createTransaction(
+        RawTransaction.Output to = transaction.getOutputs().get(0);
+        org.web3j.crypto.RawTransaction rawTransaction = org.web3j.crypto.RawTransaction.createTransaction(
                 nonce, gasPrice, gasLimit, to.getAddress(), value, data);
 
         // sign & send our transaction
@@ -142,11 +134,11 @@ public class EthereumChain implements Chain {
         rawTxParams.put(hexValue);
         rawTx.put("params", rawTxParams);
         rawTx.put("rawTx", rawTx);
-        return new SignedTransaction(transaction, rawTx);
+        return new SignedRawTransaction(transaction, rawTx);
     }
 
     @Override
-    public String sendTransaction(SignedTransaction transaction) {
+    public String sendTransaction(SignedRawTransaction transaction) {
         return null;
     }
 }

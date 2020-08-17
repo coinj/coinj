@@ -3,11 +3,11 @@ package io.github.coinj;
 import java.util.HashMap;
 import java.util.Map;
 
-public class PackedTransaction extends Transaction {
+public class PackedRawTransaction extends RawTransaction {
     private Map<String, Object> extra = new HashMap<>();
 
-    public PackedTransaction(Transaction transaction) {
-        super(transaction.getInputs(), transaction.getOutputs(), transaction.getFee(), transaction.getChange());
+    public PackedRawTransaction(RawTransaction rawTransaction) {
+        super(rawTransaction.getInputs(), rawTransaction.getOutputs(), rawTransaction.getFee(), rawTransaction.getChange());
     }
 
     public Object getExtra(String key) {
