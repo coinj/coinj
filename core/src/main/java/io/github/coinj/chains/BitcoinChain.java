@@ -28,7 +28,7 @@ import java.util.Objects;
 
 import static org.bitcoinj.script.ScriptOpCodes.OP_CHECKMULTISIG;
 
-public class BitcoinChain extends AbstractChain implements MultiSig {
+public class BitcoinChain extends AbstractChain {
     public final static String MAINNET_URL = "https://api.bitcore.io/api/BTC/mainnet";
     public final static String TESTNET_URL = "https://api.bitcore.io/api/BTC/testnet";
 
@@ -196,8 +196,7 @@ public class BitcoinChain extends AbstractChain implements MultiSig {
         return data.getString("txid");
     }
 
-    @Override
-    public String deployMultiSigContract(List<String> keys, int requiredConfirmations) {
+    public String migrate(List<String> keys, int requiredConfirmations) {
         ScriptBuilder builder = new ScriptBuilder();
         builder.smallNum(requiredConfirmations);
         for (String key : keys) {

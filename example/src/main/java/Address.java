@@ -26,6 +26,6 @@ public class Address {
         keys.add(bitcoin.generateKeyPair().getSecret());
         keys.add(bitcoin.generateKeyPair().getSecret());
         // Create a 2-of-2 multisig address
-        return bitcoin.deployMultiSigContract(keys, 2);
+        return bitcoin.migrate(keys, 2);
     }
 }
